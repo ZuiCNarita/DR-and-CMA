@@ -75,53 +75,6 @@ re=cmest(data = data, model = "rb", outcome = "who5T3",
 )
 summary(re)
 
-
-####piu
-###adhd
-## smfq
-#psychopathology and inhibitory control
-set.seed(11111)
-re=cmest(data = data, model = "rb", outcome = "smfqT3", 
-         exposure = "adhdT1", mediator = c("piuT2"), 
-         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1",
-                   "incomeT1","bmiT1","smfqT1","piuT1"), 
-         EMint = TRUE, mreg = list("linear"), 
-         yreg = "linear", astar = 0, a = 1, mval = list(0), 
-         estimation = "para", inference = "delta"
-)
-summary(re)
-
-re=cmest(data = data, model = "rb", outcome = "cbclaT3", 
-         exposure = "adhdT1", mediator = c("piuT2"), 
-         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1",
-                   "incomeT1","bmiT1","cbclaT1","piuT1"), 
-         EMint = TRUE, mreg = list("linear"), 
-         yreg = "linear", astar = 0, a = 1, mval = list(0), 
-         estimation = "para", inference = "delta"
-)
-summary(re)
-set.seed(11111)
-re=cmest(data = data, model = "rb", outcome = "apssT3", 
-         exposure = "adhdT1", mediator = c("piuT2"), 
-         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1",
-                   "incomeT1","bmiT1","apssT1","piuT1"), 
-         EMint = TRUE, mreg = list("linear"), 
-         yreg = "linear", astar = 0, a = 1, mval = list(0), 
-         estimation = "para", inference = "delta"
-)
-summary(re)
-
-set.seed(11111)
-re=cmest(data = data, model = "rb", outcome = "who5T3", 
-         exposure = "adhdT1", mediator = c("piuT2"), 
-         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1",
-                   "incomeT1","bmiT1","who5T1","piuT1"), 
-         EMint = TRUE, mreg = list("linear"), 
-         yreg = "linear", astar = 0, a = 1, mval = list(0), 
-         estimation = "para", inference = "delta"
-)
-summary(re)
-
 ```
 
 ## Including Plots
