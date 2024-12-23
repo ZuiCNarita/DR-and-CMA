@@ -1,0 +1,547 @@
+---
+title: "Untitled"
+author: "ZN"
+date: "2024/12/21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+options(digits=22)
+options(scipen=100)
+library(ggplot2)
+library(hexbin)
+library(dplyr)
+library(foreign)
+library(multcomp)
+library(mice)
+library(lmtest)
+library(jtools)
+library(geepack)
+#anydep
+data <- read.csv("imputed_data241205.csv", fileEncoding = "UTF-8")
+data$wellbeingT1=ifelse(data$who5T1<=50,1,0)
+data$wellbeingT3=ifelse(data$who5T3<=50,1,0)
+data$anydepT1=ifelse(data$smfqT1>=8,1,0)
+data$anydepT3=ifelse(data$smfqT3>=8,1,0)
+data$gamingT2=ifelse(data$gamingT2>3,1,0)
+data$tscoreT1=50+10*((data$cbclaT1-mean(data$cbclaT1))/sd(data$cbclaT1))
+data$tscoreT3=50+10*((data$cbclaT3-mean(data$cbclaT3))/sd(data$cbclaT3))
+data$anxietyT1=ifelse(data$tscoreT1>=65,1,0)
+data$anxietyT3=ifelse(data$tscoreT3>=65,1,0)
+data=subset(data,anydepT1==0)
+denA1=glm(gamingT2~ AA1age + girl + BFIQ   + factor(incomeT1) + bmiT1 +
+            cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+            smfqT1,family=binomial,data=data)
+numA1=glm(gamingT2~1,family=binomial,data=data)
+denA1.pred=predict(denA1, type = "response")
+numA1.pred=predict(numA1, type = "response")
+data$a1W=ifelse(data$gamingT2==1,numA1.pred/denA1.pred
+                ,(1-numA1.pred)/(1-denA1.pred))
+threshold=quantile(data$a1W, 0.99) 
+data$a1W_t=data$a1W
+data$a1W_t[data$a1W>threshold]=threshold
+
+
+re = glm(anydepT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + smfqT1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+
+data0 = data
+data0$gamingT2= 0
+
+data1 = data
+data1$gamingT2= 1
+
+
+no = mean(predict(re, type="response", newdata=data0))
+yes = mean(predict(re, type="response", newdata=data1))
+
+
+rd_values_yes = yes - no
+rd_values_yes
+
+rr_values_yes = yes/no
+rr_values_yes
+
+set.seed(123)
+n_bootstraps <- 200
+rdbootstrap_results_yes <- numeric(n_bootstraps)
+rrbootstrap_results_yes <- numeric(n_bootstraps)
+
+# Original model and predictions for reference
+re = glm(anydepT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + smfqT1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+# Bootstrap loop
+for (i in 1:n_bootstraps) {
+  # Resample the data with replacement
+  boot_indices <- sample(nrow(data), replace = TRUE)
+  boot_data <- data[boot_indices, ]
+  
+  # Recalculate weights for bootstrap sample
+  denA1 = glm(gamingT2 ~ AA1age + girl + BFIQ + factor(incomeT1) + bmiT1 +
+                cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+                smfqT1, family = binomial, data = boot_data)
+  numA1 = glm(gamingT2 ~ 1, family = binomial, data = boot_data)
+  
+  denA1.pred = predict(denA1, type = "response")
+  numA1.pred = predict(numA1, type = "response")
+  
+  boot_data$a1W = ifelse(boot_data$gamingT2 == 1, 
+                         numA1.pred/denA1.pred,
+                         (1-numA1.pred)/(1-denA1.pred))
+  
+  threshold = quantile(boot_data$a1W, 0.99)
+  boot_data$a1W_t = boot_data$a1W
+  boot_data$a1W_t[boot_data$a1W > threshold] = threshold
+  
+  # Fit model on bootstrap sample
+  boot_model = glm(anydepT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+                     factor(incomeT1) + bmiT1 + cohesionT1 + 
+                     behavesubT1 + punishT1 + lonelyT1 + adhdT1 + smfqT1,
+                   data = boot_data, 
+                   weights = a1W_t,
+                   family = poisson)
+  
+  # Create counterfactual datasets
+  boot_data0 = boot_data
+  boot_data0$gamingT2 = 0
+  
+  boot_data1 = boot_data
+  boot_data1$gamingT2 = 1
+  
+  # Calculate predicted probabilities
+  pred0 = mean(predict(boot_model, type = "response", newdata = boot_data0))
+  pred1 = mean(predict(boot_model, type = "response", newdata = boot_data1))
+  
+  # Store results
+  rdbootstrap_results_yes[i] = pred1 - pred0
+  rrbootstrap_results_yes[i] = pred1/pred0
+}
+
+# Calculate original estimates
+data0 = data
+data0$gamingT2 = 0
+data1 = data
+data1$gamingT2 = 1
+orig_pred0 = mean(predict(re, type = "response", newdata = data0))
+orig_pred1 = mean(predict(re, type = "response", newdata = data1))
+
+# Print results
+cat("Risk Difference:\n")
+cat("Point estimate:", orig_pred1 - orig_pred0, "\n")
+cat("95% CI:", quantile(rdbootstrap_results_yes, c(0.025, 0.975)), "\n\n")
+
+cat("Risk Ratio:\n")
+cat("Point estimate:", orig_pred1/orig_pred0, "\n")
+cat("95% CI:", quantile(rrbootstrap_results_yes, c(0.025, 0.975)), "\n")
+
+#anxiety
+data <- read.csv("imputed_data241205.csv", fileEncoding = "UTF-8")
+data$wellbeingT1=ifelse(data$who5T1<=50,1,0)
+data$wellbeingT3=ifelse(data$who5T3<=50,1,0)
+data$anydepT1=ifelse(data$smfqT1>=8,1,0)
+data$anydepT3=ifelse(data$smfqT3>=8,1,0)
+data$gamingT2=ifelse(data$gamingT2>3,1,0)
+data$tscoreT1=50+10*((data$cbclaT1-mean(data$cbclaT1))/sd(data$cbclaT1))
+data$tscoreT3=50+10*((data$cbclaT3-mean(data$cbclaT3))/sd(data$cbclaT3))
+data$anxietyT1=ifelse(data$tscoreT1>=65,1,0)
+data$anxietyT3=ifelse(data$tscoreT3>=65,1,0)
+data=subset(data,anxietyT1==0)
+denA1=glm(gamingT2~ AA1age + girl + BFIQ   + factor(incomeT1) + bmiT1 +
+            cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+            cbclaT1,family=binomial,data=data)
+numA1=glm(gamingT2~1,family=binomial,data=data)
+denA1.pred=predict(denA1, type = "response")
+numA1.pred=predict(numA1, type = "response")
+data$a1W=ifelse(data$gamingT2==1,numA1.pred/denA1.pred
+                ,(1-numA1.pred)/(1-denA1.pred))
+threshold=quantile(data$a1W, 0.99) 
+data$a1W_t=data$a1W
+data$a1W_t[data$a1W>threshold]=threshold
+re = glm(anxietyT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + cbclaT1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+
+data0 = data
+data0$gamingT2= 0
+
+data1 = data
+data1$gamingT2= 1
+
+
+no = mean(predict(re, type="response", newdata=data0))
+yes = mean(predict(re, type="response", newdata=data1))
+
+
+rd_values_yes = yes - no
+rd_values_yes
+
+rr_values_yes = yes/no
+rr_values_yes
+
+set.seed(123)
+n_bootstraps <- 200
+rdbootstrap_results_yes <- numeric(n_bootstraps)
+rrbootstrap_results_yes <- numeric(n_bootstraps)
+
+# Original model and predictions for reference
+re = glm(anxietyT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + cbclaT1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+# Bootstrap loop
+for (i in 1:n_bootstraps) {
+  # Resample the data with replacement
+  boot_indices <- sample(nrow(data), replace = TRUE)
+  boot_data <- data[boot_indices, ]
+  
+  # Recalculate weights for bootstrap sample
+  denA1 = glm(gamingT2 ~ AA1age + girl + BFIQ + factor(incomeT1) + bmiT1 +
+                cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+                cbclaT1, family = binomial, data = boot_data)
+  numA1 = glm(gamingT2 ~ 1, family = binomial, data = boot_data)
+  
+  denA1.pred = predict(denA1, type = "response")
+  numA1.pred = predict(numA1, type = "response")
+  
+  boot_data$a1W = ifelse(boot_data$gamingT2 == 1, 
+                         numA1.pred/denA1.pred,
+                         (1-numA1.pred)/(1-denA1.pred))
+  
+  threshold = quantile(boot_data$a1W, 0.99)
+  boot_data$a1W_t = boot_data$a1W
+  boot_data$a1W_t[boot_data$a1W > threshold] = threshold
+  
+  # Fit model on bootstrap sample
+  boot_model = glm(anxietyT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+                     factor(incomeT1) + bmiT1 + cohesionT1 + 
+                     behavesubT1 + punishT1 + lonelyT1 + adhdT1 + cbclaT1,
+                   data = boot_data, 
+                   weights = a1W_t,
+                   family = poisson)
+  
+  # Create counterfactual datasets
+  boot_data0 = boot_data
+  boot_data0$gamingT2 = 0
+  
+  boot_data1 = boot_data
+  boot_data1$gamingT2 = 1
+  
+  # Calculate predicted probabilities
+  pred0 = mean(predict(boot_model, type = "response", newdata = boot_data0))
+  pred1 = mean(predict(boot_model, type = "response", newdata = boot_data1))
+  
+  # Store results
+  rdbootstrap_results_yes[i] = pred1 - pred0
+  rrbootstrap_results_yes[i] = pred1/pred0
+}
+
+# Calculate original estimates
+data0 = data
+data0$gamingT2 = 0
+data1 = data
+data1$gamingT2 = 1
+orig_pred0 = mean(predict(re, type = "response", newdata = data0))
+orig_pred1 = mean(predict(re, type = "response", newdata = data1))
+
+# Print results
+cat("Risk Difference:\n")
+cat("Point estimate:", orig_pred1 - orig_pred0, "\n")
+cat("95% CI:", quantile(rdbootstrap_results_yes, c(0.025, 0.975)), "\n\n")
+
+cat("Risk Ratio:\n")
+cat("Point estimate:", orig_pred1/orig_pred0, "\n")
+cat("95% CI:", quantile(rrbootstrap_results_yes, c(0.025, 0.975)), "\n")
+
+
+#anype
+data <- read.csv("imputed_data241205.csv", fileEncoding = "UTF-8")
+data$wellbeingT1=ifelse(data$who5T1<=50,1,0)
+data$wellbeingT3=ifelse(data$who5T3<=50,1,0)
+data$anydepT1=ifelse(data$smfqT1>=8,1,0)
+data$anydepT3=ifelse(data$smfqT3>=8,1,0)
+data$gamingT2=ifelse(data$gamingT2>3,1,0)
+data$tscoreT1=50+10*((data$cbclaT1-mean(data$cbclaT1))/sd(data$cbclaT1))
+data$tscoreT3=50+10*((data$cbclaT3-mean(data$cbclaT3))/sd(data$cbclaT3))
+data$anxietyT1=ifelse(data$tscoreT1>=65,1,0)
+data$anxietyT3=ifelse(data$tscoreT3>=65,1,0)
+data=subset(data,anypeT1==0)
+denA1=glm(gamingT2~ AA1age + girl + BFIQ   + factor(incomeT1) + bmiT1 +
+            cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+            apssT1,family=binomial,data=data)
+numA1=glm(gamingT2~1,family=binomial,data=data)
+denA1.pred=predict(denA1, type = "response")
+numA1.pred=predict(numA1, type = "response")
+data$a1W=ifelse(data$gamingT2==1,numA1.pred/denA1.pred
+                ,(1-numA1.pred)/(1-denA1.pred))
+threshold=quantile(data$a1W, 0.99) 
+data$a1W_t=data$a1W
+data$a1W_t[data$a1W>threshold]=threshold
+
+
+re = glm(anypeT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + apssT1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+
+data0 = data
+data0$gamingT2= 0
+
+data1 = data
+data1$gamingT2= 1
+
+
+no = mean(predict(re, type="response", newdata=data0))
+yes = mean(predict(re, type="response", newdata=data1))
+
+
+rd_values_yes = yes - no
+rd_values_yes
+
+rr_values_yes = yes/no
+rr_values_yes
+
+set.seed(123)
+n_bootstraps <- 200
+rdbootstrap_results_yes <- numeric(n_bootstraps)
+rrbootstrap_results_yes <- numeric(n_bootstraps)
+
+# Original model and predictions for reference
+re = glm(anypeT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + apssT1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+# Bootstrap loop
+for (i in 1:n_bootstraps) {
+  # Resample the data with replacement
+  boot_indices <- sample(nrow(data), replace = TRUE)
+  boot_data <- data[boot_indices, ]
+  
+  # Recalculate weights for bootstrap sample
+  denA1 = glm(gamingT2 ~ AA1age + girl + BFIQ + factor(incomeT1) + bmiT1 +
+                cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+                apssT1, family = binomial, data = boot_data)
+  numA1 = glm(gamingT2 ~ 1, family = binomial, data = boot_data)
+  
+  denA1.pred = predict(denA1, type = "response")
+  numA1.pred = predict(numA1, type = "response")
+  
+  boot_data$a1W = ifelse(boot_data$gamingT2 == 1, 
+                         numA1.pred/denA1.pred,
+                         (1-numA1.pred)/(1-denA1.pred))
+  
+  threshold = quantile(boot_data$a1W, 0.99)
+  boot_data$a1W_t = boot_data$a1W
+  boot_data$a1W_t[boot_data$a1W > threshold] = threshold
+  
+  # Fit model on bootstrap sample
+  boot_model = glm(anypeT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+                     factor(incomeT1) + bmiT1 + cohesionT1 + 
+                     behavesubT1 + punishT1 + lonelyT1 + adhdT1 + apssT1,
+                   data = boot_data, 
+                   weights = a1W_t,
+                   family = poisson)
+  
+  # Create counterfactual datasets
+  boot_data0 = boot_data
+  boot_data0$gamingT2 = 0
+  
+  boot_data1 = boot_data
+  boot_data1$gamingT2 = 1
+  
+  # Calculate predicted probabilities
+  pred0 = mean(predict(boot_model, type = "response", newdata = boot_data0))
+  pred1 = mean(predict(boot_model, type = "response", newdata = boot_data1))
+  
+  # Store results
+  rdbootstrap_results_yes[i] = pred1 - pred0
+  rrbootstrap_results_yes[i] = pred1/pred0
+}
+
+# Calculate original estimates
+data0 = data
+data0$gamingT2 = 0
+data1 = data
+data1$gamingT2 = 1
+orig_pred0 = mean(predict(re, type = "response", newdata = data0))
+orig_pred1 = mean(predict(re, type = "response", newdata = data1))
+
+# Print results
+cat("Risk Difference:\n")
+cat("Point estimate:", orig_pred1 - orig_pred0, "\n")
+cat("95% CI:", quantile(rdbootstrap_results_yes, c(0.025, 0.975)), "\n\n")
+
+cat("Risk Ratio:\n")
+cat("Point estimate:", orig_pred1/orig_pred0, "\n")
+cat("95% CI:", quantile(rrbootstrap_results_yes, c(0.025, 0.975)), "\n")
+
+#wellbeing
+data <- read.csv("imputed_data241205.csv", fileEncoding = "UTF-8")
+data$wellbeingT1=ifelse(data$who5T1<=50,1,0)
+data$wellbeingT3=ifelse(data$who5T3<=50,1,0)
+data$anydepT1=ifelse(data$smfqT1>=8,1,0)
+data$anydepT3=ifelse(data$smfqT3>=8,1,0)
+data$gamingT2=ifelse(data$gamingT2>3,1,0)
+data$tscoreT1=50+10*((data$cbclaT1-mean(data$cbclaT1))/sd(data$cbclaT1))
+data$tscoreT3=50+10*((data$cbclaT3-mean(data$cbclaT3))/sd(data$cbclaT3))
+data$anxietyT1=ifelse(data$tscoreT1>=65,1,0)
+data$anxietyT3=ifelse(data$tscoreT3>=65,1,0)
+data=subset(data,wellbeingT1==0)
+denA1=glm(gamingT2~ AA1age + girl + BFIQ   + factor(incomeT1) + bmiT1 +
+            cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+            who5T1,family=binomial,data=data)
+numA1=glm(gamingT2~1,family=binomial,data=data)
+denA1.pred=predict(denA1, type = "response")
+numA1.pred=predict(numA1, type = "response")
+data$a1W=ifelse(data$gamingT2==1,numA1.pred/denA1.pred
+                ,(1-numA1.pred)/(1-denA1.pred))
+threshold=quantile(data$a1W, 0.99) 
+data$a1W_t=data$a1W
+data$a1W_t[data$a1W>threshold]=threshold
+
+
+re = glm(wellbeingT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + who5T1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+
+data0 = data
+data0$gamingT2= 0
+
+data1 = data
+data1$gamingT2= 1
+
+
+no = mean(predict(re, type="response", newdata=data0))
+yes = mean(predict(re, type="response", newdata=data1))
+
+
+rd_values_yes = yes - no
+rd_values_yes
+
+rr_values_yes = yes/no
+rr_values_yes
+
+set.seed(123)
+n_bootstraps <- 200
+rdbootstrap_results_yes <- numeric(n_bootstraps)
+rrbootstrap_results_yes <- numeric(n_bootstraps)
+
+# Original model and predictions for reference
+re = glm(wellbeingT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+           factor(incomeT1) + bmiT1 + cohesionT1 + 
+           behavesubT1 + punishT1 + lonelyT1 + adhdT1 + who5T1,
+         data = data, 
+         weights = a1W_t,
+         family = poisson)
+
+# Bootstrap loop
+for (i in 1:n_bootstraps) {
+  # Resample the data with replacement
+  boot_indices <- sample(nrow(data), replace = TRUE)
+  boot_data <- data[boot_indices, ]
+  
+  # Recalculate weights for bootstrap sample
+  denA1 = glm(gamingT2 ~ AA1age + girl + BFIQ + factor(incomeT1) + bmiT1 +
+                cohesionT1 + behavesubT1 + punishT1 + lonelyT1 + adhdT1 +
+                who5T1, family = binomial, data = boot_data)
+  numA1 = glm(gamingT2 ~ 1, family = binomial, data = boot_data)
+  
+  denA1.pred = predict(denA1, type = "response")
+  numA1.pred = predict(numA1, type = "response")
+  
+  boot_data$a1W = ifelse(boot_data$gamingT2 == 1, 
+                         numA1.pred/denA1.pred,
+                         (1-numA1.pred)/(1-denA1.pred))
+  
+  threshold = quantile(boot_data$a1W, 0.99)
+  boot_data$a1W_t = boot_data$a1W
+  boot_data$a1W_t[boot_data$a1W > threshold] = threshold
+  
+  # Fit model on bootstrap sample
+  boot_model = glm(wellbeingT3 ~ gamingT2 + AA1age + girl + BFIQ + 
+                     factor(incomeT1) + bmiT1 + cohesionT1 + 
+                     behavesubT1 + punishT1 + lonelyT1 + adhdT1 + who5T1,
+                   data = boot_data, 
+                   weights = a1W_t,
+                   family = poisson)
+  
+  # Create counterfactual datasets
+  boot_data0 = boot_data
+  boot_data0$gamingT2 = 0
+  
+  boot_data1 = boot_data
+  boot_data1$gamingT2 = 1
+  
+  # Calculate predicted probabilities
+  pred0 = mean(predict(boot_model, type = "response", newdata = boot_data0))
+  pred1 = mean(predict(boot_model, type = "response", newdata = boot_data1))
+  
+  # Store results
+  rdbootstrap_results_yes[i] = pred1 - pred0
+  rrbootstrap_results_yes[i] = pred1/pred0
+}
+
+# Calculate original estimates
+data0 = data
+data0$gamingT2 = 0
+data1 = data
+data1$gamingT2 = 1
+orig_pred0 = mean(predict(re, type = "response", newdata = data0))
+orig_pred1 = mean(predict(re, type = "response", newdata = data1))
+
+# Print results
+cat("Risk Difference:\n")
+cat("Point estimate:", orig_pred1 - orig_pred0, "\n")
+cat("95% CI:", quantile(rdbootstrap_results_yes, c(0.025, 0.975)), "\n\n")
+
+cat("Risk Ratio:\n")
+cat("Point estimate:", orig_pred1/orig_pred0, "\n")
+cat("95% CI:", quantile(rrbootstrap_results_yes, c(0.025, 0.975)), "\n")
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
