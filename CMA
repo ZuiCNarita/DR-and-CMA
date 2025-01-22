@@ -1,0 +1,61 @@
+library(geepack)
+library(VGAM)
+library(CMAverse)
+library(dplyr)
+options(digits=22)
+options(scipen=100)
+data <- read.csv("imputed_data241205.csv", fileEncoding = "UTF-8")
+data$prosocialT1=0-data$prosocialT1
+data$prosocialT3=0-data$prosocialT3
+data$who5T1=0-data$who5T1
+data$who5T3=0-data$who5T3
+mean_adhdT1 <- mean(data$adhdT1, na.rm = TRUE)
+sd_adhdT1 <- sd(data$adhdT1, na.rm = TRUE)
+base <- mean_adhdT1
+change <- mean_adhdT1 + sd_adhdT1
+medianm = median(data$gamingT2)
+####gaming
+###adhd
+## smfq
+#psychopathology and inhibitory control
+set.seed(11111)
+re=cmest(data = data, model = "rb", outcome = "smfqT3", 
+         exposure = "adhdT1", mediator = c("gamingT2"), 
+         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1","mothernriT1","fathernriT1","friendnriT1",
+                   "incomeT1","bmiT1","smfqT1","QgamingtimeT1","piuT1"), 
+         EMint = TRUE, mreg = list("linear"), 
+         yreg = "linear", astar = base, a = change, mval = list(medianm), 
+         estimation = "para", inference = "delta"
+)
+summary(re)
+
+re=cmest(data = data, model = "rb", outcome = "cbclaT3", 
+         exposure = "adhdT1", mediator = c("gamingT2"), 
+         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1","mothernriT1","fathernriT1","friendnriT1",
+                   "incomeT1","bmiT1","cbclaT1","QgamingtimeT1","piuT1"), 
+         EMint = TRUE, mreg = list("linear"), 
+         yreg = "linear", astar = base, a = change, mval = list(medianm), 
+         estimation = "para", inference = "delta"
+)
+summary(re)
+set.seed(11111)
+re=cmest(data = data, model = "rb", outcome = "apssT3", 
+         exposure = "adhdT1", mediator = c("gamingT2"), 
+         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1","mothernriT1","fathernriT1","friendnriT1",
+                   "incomeT1","bmiT1","apssT1","QgamingtimeT1","piuT1"), 
+         EMint = TRUE, mreg = list("linear"), 
+         yreg = "linear", astar = base, a = change, mval = list(medianm), 
+         estimation = "para", inference = "delta"
+)
+summary(re)
+
+set.seed(11111)
+re=cmest(data = data, model = "rb", outcome = "who5T3", 
+         exposure = "adhdT1", mediator = c("gamingT2"), 
+         basec = c("AA1age","girl","BFIQ","behavesubT1","cohesionT1","punishT1","lonelyT1","mothernriT1","fathernriT1","friendnriT1",
+                   "incomeT1","bmiT1","who5T1","QgamingtimeT1","piuT1"), 
+         EMint = TRUE, mreg = list("linear"), 
+         yreg = "linear", astar = base, a = change, mval = list(medianm), 
+         estimation = "para", inference = "delta"
+)
+summary(re)
